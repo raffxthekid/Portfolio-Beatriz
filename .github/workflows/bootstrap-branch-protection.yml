@@ -1,0 +1,63 @@
+name: Bootstrap branch protection
+
+# Manually triggered workflow that marks "Verify no 375px overflow" as a
+# required status check on the default branch.
+#
+# Requirements:
+#   1. Create a fine-grained Personal Access Token (or GitHub App token) with
+#      repository permission: "Administration: Read and write".
+#   2. Add it as a repo secret named ADMIN_TOKEN
+#      (Settings → Secrets and variables → Actions → New repository secret).
+#   3. Run this workflow once: Actions → "Bootstrap branch protection" → Run workflow.
+#
+# The default GITHUB_TOKEN cannot modify branch protection, which is why a
+# separate admin token is required.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to protect"
+        required: true
+        default: "main"
+
+jobs:
+  protect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require mobile-overflow check
+        env:
+          GH_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::ADMIN_TOKEN secret is missing. See workflow file header for setup."
+            exit 1
+          fi
+
+          echo "Applying branch protection to $REPO@$BRANCH ..."
+
+          curl -sS -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPO/branches/$BRANCH/protection" \
+            -d '{
+              "required_status_checks": {
+                "strict": true,
+                "contexts": ["Verify no 375px overflow"]
+              },
+              "enforce_admins": false,
+              "required_pull_request_reviews": null,
+              "restrictions": null,
+              "allow_force_pushes": false,
+              "allow_deletions": false
+            }' | tee /tmp/resp.json
+
+          if grep -q '"message"' /tmp/resp.json && ! grep -q '"url"' /tmp/resp.json; then
+            echo "::error::Branch protection update failed (see response above)."
+            exit 1
+          fi
+
+          echo "Branch protection updated. PRs to $BRANCH now require the mobile-overflow check to pass."

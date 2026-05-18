@@ -1,0 +1,10 @@
+{
+  "$schema": "./mobile-overflow.schema.json",
+  "ignore": [
+    "**/*.stories.tsx",
+    "**/*.test.tsx",
+    "**/*.test.ts",
+    "src/components/site/legacy/**"
+  ],
+  "disableRules": []
+}
